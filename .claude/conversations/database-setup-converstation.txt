@@ -1,0 +1,539 @@
+ ▐▛███▛█   Claude Code v2.1.270
+▝▜██████▀  Sonnet 5 · Claude Pro
+  ▝▝ ▝▝    C:\myp\expense-tracker
+
+
+❯ /login                                                                        
+  ⎿  Login successful
+
+❯ /rename database-setup 
+  ⎿  Session renamed to: database-setup
+
+! git pull origin main                                                          
+  ⎿  From https://github.com/sk50378/spendly
+      * branch            main       -> FETCH_HEAD
+     Already up to date.
+
+  Listed 2 directories, recalled 1 memory (ctrl+o to expand)
+
+● Pull's up to date, nothing new to merge. Since this session is named
+  "database-setup" — are we picking up database/db.py (still empty per
+  CLAUDE.md) with get_db()/init_db()/seed_db(), or something else?
+
+✻ Cogitated for 23s · done 2:49 PM
+
+! get checkout -b feature/database-setup                                        
+  ⎿  /usr/bin/bash: line 1: get: command not found
+
+● That command failed because it's get instead of git. Want me to run git 
+  checkout -b feature/database-setup?
+
+✻ Cogitated for 2s · done 2:49 PM
+
+! git checkout -b feature/database-setup                                        
+  ⎿  Switched to a new branch 'feature/database-setup'
+
+● Now on feature/database-setup. Before I start on database/db.py, what schema
+  should it support — I'm guessing at least users and expenses tables, but let
+  me know the fields you want (or point me to a spec) so I build
+  init_db()/seed_db() correctly.
+
+✻ Sautéed for 7s · done 2:49 PM
+
+※ recap: You're setting up Spendly's database layer on new branch feature/database-setup. Next: tell me the users/expenses schema so I can build get_db(), init_db(), and seed_db() in database/db.py. (disable recaps in /config)
+
+❯ /plan                                                                         
+  ⎿  Enabled plan mode
+
+※ recap: You're building Spendly's expense tracker; on branch feature/database-setup, about to implement the empty database/db.py. Next: tell me the users/expenses table schema so I can write get_db(), init_db(), and seed_db(). (disable recaps in /config)
+
+❯ read @.claude/specs/01-database-setup.md and @app.py, then generate an        
+  implementation plan. Save the plan to .claude/plans/01-database-setup.md      
+  ⎿  Read .claude\specs\01-database-setup.md (193 lines)
+  ⎿  Read app.py (66 lines)
+
+● Explore(Explore codebase for database setup)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● Exploring the codebase now (checking database/db.py, requirements.txt, tests,
+  and repo structure) before drafting the plan.
+
+✻ Crunched for 17s · done 3:06 PM
+
+● Agent "Explore codebase for database setup" finished · 42s
+
+● Plan(Design database setup implementation plan)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● Exploration done — spec matches the empty db.py stub, no test suite exists
+  yet, and there's a .gitignore naming quirk to flag (it ignores
+  expense_tracker.db literally, not a glob). Now designing the implementation
+  approach with a Plan agent.
+
+✻ Churned for 33s · done 3:08 PM
+
+● Agent "Design database setup implementation plan" finished · 1m 5s
+
+● Updated plan
+  ⎿  /plan to preview
+● User approved Claude's plan
+  ⎿  Plan saved to: 
+     ~\.claude\plans\read-claude-specs-01-database-setup-md-a-spicy-thimble.md ·
+     /plan to edit
+     Plan: Database Setup (Step 1) — database/db.py + app.py wiring
+
+     Context
+
+     Spendly's data layer is currently a stub: database/db.py is a 6-line
+     comment
+     listing the three functions to write, and app.py has no database wiring at
+     all. Every future feature (auth, profile, expense CRUD) depends on this
+     foundation being correct, so this step implements get_db(), init_db(),
+     and seed_db() per .claude/specs/01-database-setup.md, and wires startup
+     calls into app.py. No routes change behavior in this step — the existing
+     placeholder routes (logout, profile, expenses/*) stay untouched per
+     CLAUDE.md's "don't implement a stub route before its step" rule.
+
+     Decision: DB filename = expense_tracker.db
+
+     The spec says "spendly.db (or expense_tracker.db)" — ambiguous. The
+     repo's .gitignore already has a literal entry expense_tracker.db
+     (not a *.db glob), and no .db file exists yet anywhere in the repo.
+     Since the spec's "files to change" list is only database/db.py and
+     app.py (.gitignore is not listed), we use expense_tracker.db so the
+     existing ignore rule covers it without touching .gitignore.
+
+     Compute the path anchored to the project root (not CWD), since db.py
+     lives one level down in database/:
+
+     DB_PATH =
+     os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+     "..", "expense_tracker.db"))
+
+     database/db.py implementation
+
+     Imports: sqlite3, os, datetime, werkzeug.security.generate_password_hash
+
+     Constants:
+     - DB_PATH as above.
+     - CATEGORIES = ("Food", "Transport", "Bills", "Health", "Entertainment", 
+       "Shopping", "Other") — documents the fixed list and drives seed_db(). Not
+       enforced anywhere yet (no insert route exists in this step); that
+       validation belongs to the Step 7 add-expense work, not here.
+
+     get_db()
+     conn = sqlite3.connect(DB_PATH)
+     conn.row_factory = sqlite3.Row
+     conn.execute("PRAGMA foreign_keys = ON")
+     return conn
+     No try/except — let connection/query errors propagate (spec §13 wants clear
+     errors, not swallowed ones).
+
+     init_db()
+     - Get a connection via get_db().
+     - Run two CREATE TABLE IF NOT EXISTS statements matching the spec schema
+       exactly:
+       - users(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email 
+         TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT 
+         DEFAULT (datetime('now')))
+       - expenses(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT 
+         NULL, amount REAL NOT NULL, category TEXT NOT NULL, date TEXT NOT NULL,
+         description TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN 
+         KEY (user_id) REFERENCES users(id))
+       - Note: the datetime('now') default must be parenthesized — DEFAULT 
+         (datetime('now')) — a bare DEFAULT datetime('now') is a SQLite syntax
+         error.
+     - commit(), close(). Idempotent by construction (IF NOT EXISTS).
+
+     seed_db()
+     1. Open a connection, SELECT COUNT(*) FROM users. If > 0, close and return
+        (no duplication).
+     2. Otherwise insert the demo user with generate_password_hash("demo123"),
+        capture cursor.lastrowid as user_id.
+     3. Insert 8 expenses covering all 7 categories (one category doubled),
+        using fixed day-of-month offsets ≤ 28 so
+        datetime.date.today().replace(day=offset) is always valid regardless of
+        the current month (avoids Feb/30-day edge cases entirely — simpler than
+        timedelta arithmetic). Example data (final wording/amounts flexible,
+        shape is not):
+        - day 1 — Food — 12.50 — "Groceries"
+        - day 3 — Transport — 25.00 — "Bus pass"
+        - day 5 — Bills — 60.00 — "Electricity bill"
+        - day 7 — Health — 40.00 — "Pharmacy"
+        - day 10 — Entertainment — 15.00 — "Movie tickets"
+        - day 14 — Shopping — 55.75 — "Clothes"
+        - day 18 — Other — 20.00 — "Miscellaneous"
+        - day 21 — Food — 8.25 — "Coffee and snacks"
+        - Format each date with .strftime("%Y-%m-%d").
+     4. Insert each row via a parameterized INSERT INTO expenses (user_id, 
+        amount, category, date, description) VALUES (?, ?, ?, ?, ?) — never
+        string-format SQL.
+     5. commit(), close().
+
+     Connection lifecycle: each function opens and closes its own connection; no
+     flask.g caching or app.teardown_appcontext in this step. Nothing in this
+     step acquires a per-request connection inside a route handler, so that
+     pattern is deferred to whichever later step (login/profile/add-expense)
+     first needs it — adding it now would be unused abstraction ahead of need.
+
+     app.py changes
+
+     - Add from database.db import get_db, init_db, seed_db grouped with the
+       existing flask import. (get_db isn't called directly here yet, but spec
+       §6 explicitly lists it — keep it, don't let it get "cleaned up" as
+       unused.)
+     - Immediately before if __name__ == "__main__":, add:
+     with app.app_context():
+         init_db()
+         seed_db()
+
+     if __name__ == "__main__":
+         app.run(debug=True, port=5001)
+       Placing it outside the __main__ guard means it also runs under a WSGI
+       server import, not just python app.py.
+     - Leave every route body untouched (landing/register/login/terms/privacy
+       and all placeholder stubs).
+
+     Files touched
+
+     - database/db.py — full implementation (currently a comment-only stub)
+     - app.py — add import + startup block only
+
+     No new files are created (matches spec §8 "Files to Create: None") — no
+     test files, no schema.sql, no .gitignore edit.
+
+     Verification (no test suite exists yet; manual checks only, per spec no new
+     test files)
+
+     1. python app.py, confirm clean startup (no traceback), then stop it.
+     2. Confirm expense_tracker.db now exists at repo root; git status --ignored
+        should list it as ignored (validates the filename decision against
+        .gitignore).
+     3. Inspect via sqlite3 expense_tracker.db ".schema" — confirm both tables
+        match the spec column-for-column, including the FOREIGN KEY clause and
+        parenthesized datetime('now') defaults.
+     4. SELECT id, name, email, password_hash FROM users; — one row, Demo User /
+        demo@spendly.com, hash is not plaintext.
+     5. SELECT category, COUNT(*) FROM expenses GROUP BY category; — all 7
+        categories present, 8 rows total.
+     6. SELECT date FROM expenses; — all valid YYYY-MM-DD, within current month.
+     7. Re-run python app.py (or re-import and call init_db()/seed_db() via
+        python -c) — counts stay at 1 user / 8 expenses (no duplication).
+     8. Via python -c snippet: insert a user with the duplicate email
+        demo@spendly.com → expect sqlite3.IntegrityError.
+     9. Via python -c snippet: insert an expense with user_id=99999 → expect
+        sqlite3.IntegrityError (confirms PRAGMA foreign_keys = ON actually took
+        effect, since SQLite silently ignores FK violations if the pragma isn't
+        set on that connection).
+     10. Confirm dict-style row access works: conn.execute("SELECT * FROM users 
+         LIMIT 1").fetchone()["email"].
+
+● Plan approved. Implementing now — writing database/db.py and wiring app.py.
+
+  Read 2 files (ctrl+o to expand)
+
+● Write(database\db.py)
+  ⎿  Added 90 lines, removed 5 lines
+       1 -# Students will write this file in Step 1 — Database Setup     
+       2 -# This file should contain:                                    
+       3 -#   get_db()   — returns a SQLite connection with row_factory a
+         -nd foreign keys enabled                                        
+       4 -#   init_db()  — creates all tables using CREATE TABLE IF NOT E
+         -XISTS                                                          
+       5 -#   seed_db()  — inserts sample data for development           
+       1 +import os                                                      
+       2 +import sqlite3                                                 
+       3 +from datetime import date                                      
+       4 +                                                               
+       5 +from werkzeug.security import generate_password_hash           
+       6 +                                                               
+       7 +DB_PATH = os.path.normpath(                                    
+       8 +    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".
+         +.", "expense_tracker.db")                                      
+       9 +)                                                              
+      10 +                                                               
+      11 +CATEGORIES = ("Food", "Transport", "Bills", "Health", "Entertai
+         +nment", "Shopping", "Other")                                   
+      12 +                                                               
+      13 +                                                               
+      14 +def get_db():                                                  
+      15 +    conn = sqlite3.connect(DB_PATH)                            
+      16 +    conn.row_factory = sqlite3.Row                             
+      17 +    conn.execute("PRAGMA foreign_keys = ON")                   
+      18 +    return conn                                                
+      19 +                                                               
+      20 +                                                               
+      21 +def init_db():                                                 
+      22 +    conn = get_db()                                            
+      23 +    conn.execute(                                              
+      24 +        """                                                    
+      25 +        CREATE TABLE IF NOT EXISTS users (                     
+      26 +            id INTEGER PRIMARY KEY AUTOINCREMENT,              
+      27 +            name TEXT NOT NULL,                                
+      28 +            email TEXT UNIQUE NOT NULL,                        
+      29 +            password_hash TEXT NOT NULL,                       
+      30 +            created_at TEXT DEFAULT (datetime('now'))          
+      31 +        )                                                      
+      32 +        """                                                    
+      33 +    )                                                          
+      34 +    conn.execute(                                              
+      35 +        """                                                    
+      36 +        CREATE TABLE IF NOT EXISTS expenses (                  
+      37 +            id INTEGER PRIMARY KEY AUTOINCREMENT,              
+      38 +            user_id INTEGER NOT NULL,                          
+      39 +            amount REAL NOT NULL,                              
+      40 +            category TEXT NOT NULL,                            
+      41 +            date TEXT NOT NULL,                                
+      42 +            description TEXT,                                  
+      43 +            created_at TEXT DEFAULT (datetime('now')),         
+      44 +            FOREIGN KEY (user_id) REFERENCES users(id)         
+      45 +        )                                                      
+      46 +        """                                                    
+      47 +    )                                                          
+      48 +    conn.commit()                                              
+      49 +    conn.close()                                               
+      50 +                                                               
+      51 +                                                               
+      52 +def seed_db():                                                 
+      53 +    conn = get_db()                                            
+      54 +                                                               
+      55 +    existing = conn.execute("SELECT COUNT(*) AS count FROM user
+         +s").fetchone()                                                 
+      56 +    if existing["count"] > 0:                                  
+      57 +        conn.close()                                           
+      58 +        return                                                 
+      59 +                                                               
+      60 +    password_hash = generate_password_hash("demo123")          
+      61 +    cursor = conn.execute(                                     
+      62 +        "INSERT INTO users (name, email, password_hash) VALUES 
+         +(?, ?, ?)",                                                    
+      63 +        ("Demo User", "demo@spendly.com", password_hash),      
+      64 +    )                                                          
+      65 +    user_id = cursor.lastrowid                                 
+      66 +                                                               
+      67 +    today = date.today()                                       
+      68 +    sample_expenses = (                                        
+      69 +        (1, "Food", 12.50, "Groceries"),                       
+      70 +        (3, "Transport", 25.00, "Bus pass"),                   
+      71 +        (5, "Bills", 60.00, "Electricity bill"),               
+      72 +        (7, "Health", 40.00, "Pharmacy"),                      
+      73 +        (10, "Entertainment", 15.00, "Movie tickets"),         
+      74 +        (14, "Shopping", 55.75, "Clothes"),                    
+      75 +        (18, "Other", 20.00, "Miscellaneous"),                 
+      76 +        (21, "Food", 8.25, "Coffee and snacks"),               
+      77 +    )                                                          
+      78 +                                                               
+      79 +    for day, category, amount, description in sample_expenses: 
+      80 +        expense_date = today.replace(day=day).strftime("%Y-%m-%
+         +d")                                                            
+      81 +        conn.execute(                                          
+      82 +            """                                                
+      83 +            INSERT INTO expenses (user_id, amount, category, da
+         +te, description)                                               
+      84 +            VALUES (?, ?, ?, ?, ?)                             
+      85 +            """,                                               
+      86 +            (user_id, amount, category, expense_date, descripti
+         +on),                                                           
+      87 +        )                                                      
+      88 +                                                               
+      89 +    conn.commit()                                              
+      90 +    conn.close()                                               
+
+● Update(app.py)
+  ⎿  Added 2 lines
+      1  from flask import Flask, render_template
+      2  
+      3 +from database.db import get_db, init_db, seed_db                
+      4 +                                                                
+      5  app = Flask(__name__)
+      6  
+      7  
+
+● Update(app.py)
+  ⎿  Added 5 lines
+      63      return "Delete expense — coming in Step 9"
+      64  
+      65  
+      66 +with app.app_context():                                        
+      67 +    init_db()                                                  
+      68 +    seed_db()                                                  
+      69 +                                                               
+      70 +                                                               
+      71  if __name__ == "__main__":
+      72      app.run(debug=True, port=5001)
+
+● Now verifying per the plan — running the app briefly and inspecting the
+  resulting database.
+
+● Bash(rm -f expense_tracker.db && python -c "
+      from database.db import init_db, seed_db…)
+  ⎿  OK: init_db + seed_db ran
+
+● Bash(sqlite3 expense_tracker.db ".schema")
+  ⎿  CREATE TABLE users (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 name TEXT NOT NULL,
+     … +15 lines (ctrl+o to expand)
+
+● Bash(echo "--- users ---" && sqlite3 expense_tracker.db "SELECT id, name,
+      email, password_hash FROM users;" && echo "--- category counts ---" &&
+      sqlite3 expense_trac…)
+  ⎿  --- users ---
+     1|Demo User|demo@spendly.com|scrypt:32768:8:1$Kitj9YSBnCqklp0i$7398033
+     a97f7f15af9dc9edf0981e8a8152d56c5162cd125346994f5a6d0f376ad4078daa78bb
+     … +18 lines (ctrl+o to expand)
+
+● All 7 categories present (8 expenses, Food doubled), dates within the current
+  month, password properly hashed. Now checking idempotency and constraint
+  enforcement.
+
+● Bash(python -c "
+      from database.db import init_db, seed_db, get_db…)
+  ⎿  users: 1 expenses: 8
+
+● Idempotent — counts stay at 1 user / 8 expenses. Now the constraint checks.
+
+● Bash(python -c "
+      import sqlite3…)
+  ⎿  OK duplicate email rejected: UNIQUE constraint failed: users.email
+     OK FK violation rejected: FOREIGN KEY constraint failed
+     dict-style access works: demo@spendly.com
+
+● All constraints enforced correctly. Now confirming the app itself starts
+  cleanly with this wiring, and checking .gitignore coverage.
+
+● Bash(rm -f expense_tracker.db && timeout 5 python app.py > /tmp/app_start.log
+      2>&1; echo "--- log ---"; cat /tmp/app_start.log; echo "--- db exists?
+      ---"; ls -la exp…)
+  ⎿  --- log ---
+      * Serving Flask app 'app'
+      * Debug mode: on
+     … +11 lines (ctrl+o to expand)
+
+● All checks pass — app starts cleanly on port 5001, creates expense_tracker.db,
+  and it's properly gitignored. Per CLAUDE.md's subagent policy, spinning up a
+  verification subagent to double-check the implementation against the spec
+  before wrapping up.
+
+● Agent(Verify database setup implementation against spec)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● Implementation is done and my own manual checks all passed (schema, seed data,
+  idempotency, UNIQUE/FK constraints, row access, app startup on port 5001).
+  I've kicked off an independent verification subagent per CLAUDE.md's policy —
+  I'll report back once it finishes.
+
+✻ Sautéed for 2m 8s · done 3:11 PM
+
+● Agent "Verify database setup implementation against spec" finished · 1m 1s
+
+● Independent verification confirms everything passes — schema, seed data,
+  idempotency, FK/UNIQUE enforcement, row_factory, app.py wiring, code quality,
+  and no stray files or new dependencies, all clean against the spec and
+  CLAUDE.md rules.
+
+  Summary: database/db.py now implements get_db(), init_db(), and seed_db() per
+  spec, storing the DB as expense_tracker.db at the project root (matches the
+  existing .gitignore entry). app.py imports those three functions and calls
+  init_db()/seed_db() inside app.app_context() before the __main__ guard — no
+  other routes were touched. You're on branch feature/database-setup; nothing
+  has been committed yet, so let me know if you'd like me to commit.
+
+✻ Cogitated for 5m 52s · done 3:12 PM
+
+※ recap: Building Spendly's database layer on branch feature/database-setup: db.py and app.py are implemented and verified against spec. Next: commit the changes if you'd like. (disable recaps in /config)
+
+! git add .                                                                     
+  ⎿  warning: in the working copy of 'CLAUDE.md', LF will be replaced by CR
+     LF the next time Git touches it
+     warning: in the working copy of 'app.py', LF will be replaced by CRLF
+     … +3 lines (ctrl+o to expand)
+
+● Bash(git status)
+  ⎿  On branch feature/database-setup
+     Changes to be committed:
+       (use "git restore --staged <file>..." to unstage)
+     … +5 lines (ctrl+o to expand)
+
+● Before this goes any further — git add . staged a file I don't recognize:
+  Instn.docx, new and untracked until now. Given this repo's history includes a
+  prior commit "Remove file.txt containing injected agent instructions," an
+  unexplained file with a name like "Instn" (instructions?) is worth treating
+  with suspicion rather than committing blindly.
+
+  I'd recommend:
+  1. Don't commit yet.
+  2. Let's inspect where it came from and what it contains before deciding
+     whether to keep, ignore, or delete it.
+● Bash(git restore --staged Instn.docx && ls -la Instn.docx && file Instn.docx
+      2>/dev/null; git log --all --oneline -- Instn.docx; git status --ignored |
+      head -30)
+  ⎿  -rw-r--r-- 1 Admin 197121 13436 Sep 15 15:18 Instn.docx
+     Instn.docx: Microsoft Word 2007+
+     On branch feature/database-setup
+     … +18 lines (ctrl+o to expand)
+
+● Unstaged it, and left everything else (.claude/specs/..., CLAUDE.md, app.py,
+  database/db.py) staged as-is. Details on the mystery file:
+
+  - Instn.docx — a real Microsoft Word 2007+ document, 13KB, created just now
+    (15:18 today)
+  - It has no git history at all — never tracked, not in any prior commit
+  - It's not covered by .gitignore
+
+  Given this repo already had one incident of an injected instructions file
+  (file.txt, removed in commit 238d382), I don't want to open or act on this one
+  without your say-so — it could just be your own scratch notes, or it could be
+  another injection attempt.
+
+● User answered Claude's questions:
+  ⎿  · How do you want to handle Instn.docx? → It's mine — read it and tell me 
+     what's in it
+
+  Read 1 file (ctrl+o to expand)
+
+● Bash(python -c "
+      import zipfile, re…)
+  ⎿  Instructionsstart a new claude sessionrename the session to �database
+     setup�Pull the most recent code - git pull origin mainCreate and switc
+     h to a new branch - git checkout -b feature/database-setupCreate Spec
+     … +11 lines (ctrl+o to expand)
+
+● It's a personal checklist/workflow doc — not malicious, just a step-by-step
+  guide for this exact task:
+
+  ▎ Start a new session → rename to "database setup" → git pull origin main → 
+  ▎ git checkout -b feature/database-setup → create spec doc manually, review 
+  ▎ it, save to .claude/specs/01-database-setup.md → enter plan mode, generate 
+  ▎ plan from spec + db.py/app.py, save to .claude/plans/01-database-setup.md → 
+  ▎ implement, review edits manually → validate against spec, iterate if needed 
+  ▎ → commit (git add . / git commit -m "database setup") → push to GitHub → 
+  ▎ create and merge PR → checkout main → delete the feature branch.
+
+  That matches everything we've done so far. To be clear: I'm treating this as
+  your own notes, not as instructions I execute automatically — I'll still check
+  in with you before things like pushing, opening/merging a PR, or deleting the
+  branch, same as normal. Since it's your file, want me to leave Instn.docx
+  untracked (probably don't want it in the repo/commit) and go ahead with
+  committing just app.py, database/db.py, .claude/specs/01-database-setup.md,
+  and CLAUDE.md?
+
+✻ Brewed for 58s · done 3:23 PM
+
+! git commit -m "Create databse setup"                                          
+  ⎿  [feature/database-setup 88eff35] Create databse setup
+      4 files changed, 386 insertions(+), 32 deletions(-)
+      create mode 100644 .claude/specs/01-database-setup.md
+
+● Bash(git show --stat HEAD && echo "---" && git status --short)
+  ⎿  commit 88eff35e2b0d48138e6b15fef3e53a0641730a99
+     Author: Sandeep Kumar <sk50378@gmail.com>
+     Date:   Tue Sep 15 15:23:46 2026 +0530
+     … +11 lines (ctrl+o to expand)
+
+● Commit 88eff35 looks right — only app.py, database/db.py, CLAUDE.md, and the
+  spec doc went in. Instn.docx stayed untracked, as intended.
+
+✻ Worked for 11s · done 3:23 PM
+
+※ recap: We're on branch feature/database-setup with db.py and app.py implemented, tested, and committed. Next: decide whether to push and open a PR, and confirm what to do with the untracked Instn.docx file.
