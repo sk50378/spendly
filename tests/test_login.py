@@ -10,15 +10,16 @@ def client():
         yield client
 
 
-def test_login_valid_credentials_redirects_to_profile(client):
+def test_login_valid_credentials_redirects_to_landing(client):
     response = client.post(
         "/login",
         data={"email": "demo@spendly.com", "password": "demo123"},
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/profile")
+    assert response.headers["Location"].endswith("/")
     with client.session_transaction() as sess:
         assert sess.get("user_id") is not None
+        assert sess.get("user_name") == "Demo User"
 
 
 def test_login_wrong_password_shows_generic_error(client):
@@ -71,11 +72,12 @@ def test_nav_shows_login_links_when_logged_out(client):
     assert b"Log out" not in response.data
 
 
-def test_nav_shows_logout_link_when_logged_in(client):
+def test_nav_shows_username_and_logout_link_when_logged_in(client):
     client.post(
         "/login",
         data={"email": "demo@spendly.com", "password": "demo123"},
     )
     response = client.get("/")
+    assert b"Demo User" in response.data
     assert b"Log out" in response.data
     assert b"Sign in" not in response.data

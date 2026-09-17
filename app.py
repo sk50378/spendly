@@ -74,7 +74,8 @@ def login():
         )
 
     session["user_id"] = user["id"]
-    return redirect(url_for("profile"))
+    session["user_name"] = user["name"]
+    return redirect(url_for("landing"))
 
 
 @app.route("/terms")
@@ -89,7 +90,7 @@ def privacy():
 
 @app.route("/logout")
 def logout():
-    session.pop("user_id", None)
+    session.clear()
     return redirect(url_for("login"))
 
 
